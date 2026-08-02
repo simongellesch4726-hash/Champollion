@@ -31,29 +31,45 @@ jobs:
         make -j$(sysctl -n hw.logicalcpu)
         make install
 
-    - name: Build Champollion (statically linked)
+    - name: Build Champollion (statically linked, no bundle)
       run: |
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release \
                  -DCMAKE_OSX_ARCHITECTURES=arm64 \
                  -DBUILD_SHARED_LIBS=OFF \
                  -DBoost_USE_STATIC_LIBS=ON \
-                 -Dfmt_DIR=$PWD/../fmt/install/lib/cmake/fmt
+                 -Dfmt_DIR=$PWD/../fmt/install/lib/cmake/fmt \
+                 -DCMAKE_OSX_BUNDLE=OFF \
+                 -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=.
         make -j$(sysctl -n hw.logicalcpu)
+
+    - name: Locate binary
+      id: locate
+      run: |
+        # Show full tree
+        echo "=== Contents of build/ ==="
+        find build -type f -exec file {} \;
+
+        # Try to find the actual executable
+        if [ -f build/Champollion ]; then
+          echo "BINARY=build/Champollion" >> $GITHUB_OUTPUT
+        elif [ -f build/bin/Champollion ]; then
+          echo "BINARY=build/bin/Champollion" >> $GITHUB_OUTPUT
+        elif [ -d build/Champollion ] && [ -f build/Champollion/Contents/MacOS/Champollion ]; then
+          echo "BINARY=build/Champollion/Contents/MacOS/Champollion" >> $GITHUB_OUTPUT
+        else
+          echo "ERROR: No binary found. Exiting."
+          exit 1
+        fi
 
     - name: Create .deb package structure
       run: |
         mkdir -p deb/usr/local/bin
-        # Find binary
-        if [ -f build/Champollion ]; then
-          cp build/Champollion deb/usr/local/bin/
-        elif [ -f build/bin/Champollion ]; then
-          cp build/bin/Champollion deb/usr/local/bin/
-        else
-          echo "Error: Champollion binary not found!"
-          ls -la build/
-          exit 1
-        fi
+        BINARY="${{ steps.locate.outputs.BINARY }}"
+        echo "Using binary: $BINARY"
+        file "$BINARY"
+        cp "$BINARY" deb/usr/local/bin/Champollion
+
         mkdir -p deb/DEBIAN
         cat > deb/DEBIAN/control << EOF
         Package: champollion
