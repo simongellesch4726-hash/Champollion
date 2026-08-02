@@ -1,99 +1,18 @@
-name: Build Champollion .deb for iOS
+- name: Locate binary
+  id: locate
+  run: |
+    echo "=== Contents of build/ ==="
+    find build -type f -exec file {} \;
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: macos-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install dependencies
-      run: |
-        brew install boost cmake
-
-    - name: Build fmt as static library
-      run: |
-        git clone https://github.com/fmtlib/fmt.git
-        cd fmt
-        mkdir build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release \
-                 -DCMAKE_OSX_ARCHITECTURES=arm64 \
-                 -DBUILD_SHARED_LIBS=OFF \
-                 -DCMAKE_INSTALL_PREFIX=../install
-        make -j$(sysctl -n hw.logicalcpu)
-        make install
-
-    - name: Build Champollion (statically linked, no bundle)
-      run: |
-        mkdir build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release \
-                 -DCMAKE_OSX_ARCHITECTURES=arm64 \
-                 -DBUILD_SHARED_LIBS=OFF \
-                 -DBoost_USE_STATIC_LIBS=ON \
-                 -Dfmt_DIR=$PWD/../fmt/install/lib/cmake/fmt \
-                 -DCMAKE_OSX_BUNDLE=OFF \
-                 -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=.
-        make -j$(sysctl -n hw.logicalcpu)
-
-    - name: Locate binary
-      id: locate
-      run: |
-        # Show full tree
-        echo "=== Contents of build/ ==="
-        find build -type f -exec file {} \;
-
-        # Try to find the actual executable
-        if [ -f build/Champollion ]; then
-          echo "BINARY=build/Champollion" >> $GITHUB_OUTPUT
-        elif [ -f build/bin/Champollion ]; then
-          echo "BINARY=build/bin/Champollion" >> $GITHUB_OUTPUT
-        elif [ -d build/Champollion ] && [ -f build/Champollion/Contents/MacOS/Champollion ]; then
-          echo "BINARY=build/Champollion/Contents/MacOS/Champollion" >> $GITHUB_OUTPUT
-        else
-          echo "ERROR: No binary found. Exiting."
-          exit 1
-        fi
-
-    - name: Create .deb package structure
-      run: |
-        mkdir -p deb/usr/local/bin
-        BINARY="${{ steps.locate.outputs.BINARY }}"
-        echo "Using binary: $BINARY"
-        file "$BINARY"
-        cp "$BINARY" deb/usr/local/bin/Champollion
-
-        mkdir -p deb/DEBIAN
-        cat > deb/DEBIAN/control << EOF
-        Package: champollion
-        Version: 1.3.2-1
-        Section: utils
-        Priority: optional
-        Architecture: iphoneos-arm
-        Maintainer: Your Name <you@example.com>
-        Description: Papyrus decompiler for Skyrim SE
-         Champollion decompiles .pex files to readable .psc source.
-        EOF
-        cat > deb/DEBIAN/postinst << 'EOF'
-        #!/bin/sh
-        chmod 755 /usr/local/bin/Champollion
-        exit 0
-        EOF
-        chmod 755 deb/DEBIAN/postinst
-
-    - name: Build .deb
-      run: |
-        dpkg-deb --build deb champollion.deb
-
-    - name: Upload .deb
-      uses: actions/upload-artifact@v4
-      with:
-        name: champollion.deb
-        path: champollion.deb
+    if [ -f build/Champollion ]; then
+      echo "BINARY=build/Champollion" >> $GITHUB_OUTPUT
+    elif [ -f build/bin/Champollion ]; then
+      echo "BINARY=build/bin/Champollion" >> $GITHUB_OUTPUT
+    elif [ -f build/Champollion/Champollion ]; then
+      echo "BINARY=build/Champollion/Champollion" >> $GITHUB_OUTPUT
+    elif [ -d build/Champollion ] && [ -f build/Champollion/Contents/MacOS/Champollion ]; then
+      echo "BINARY=build/Champollion/Contents/MacOS/Champollion" >> $GITHUB_OUTPUT
+    else
+      echo "ERROR: No binary found. Exiting."
+      exit 1
+    fio
