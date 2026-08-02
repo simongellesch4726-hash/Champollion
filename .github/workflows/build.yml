@@ -17,27 +17,32 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install boost cmake fmt
+        brew install boost cmake
 
-    - name: Build for ARM64
+    - name: Build fmt as static library
+      run: |
+        git clone https://github.com/fmtlib/fmt.git
+        cd fmt
+        mkdir build && cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release \
+                 -DCMAKE_OSX_ARCHITECTURES=arm64 \
+                 -DBUILD_SHARED_LIBS=OFF \
+                 -DCMAKE_INSTALL_PREFIX=../install
+        make -j$(sysctl -n hw.logicalcpu)
+        make install
+
+    - name: Build Champollion
       run: |
         mkdir build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+        cmake .. -DCMAKE_BUILD_TYPE=Release \
+                 -DCMAKE_OSX_ARCHITECTURES=arm64 \
+                 -DBUILD_SHARED_LIBS=OFF \
+                 -DBoost_USE_STATIC_LIBS=ON \
+                 -Dfmt_DIR=$PWD/../fmt/install/lib/cmake/fmt
         make -j$(sysctl -n hw.logicalcpu)
-
-    - name: Copy fmt library
-      run: |
-        mkdir -p libs
-        cp /opt/homebrew/opt/fmt/lib/libfmt.12.dylib libs/
 
     - name: Upload binary
       uses: actions/upload-artifact@v4
       with:
         name: Champollion-iOS
         path: build/Champollion
-
-    - name: Upload fmt library
-      uses: actions/upload-artifact@v4
-      with:
-        name: libfmt
-        path: libs/libfmt.12.dylib
