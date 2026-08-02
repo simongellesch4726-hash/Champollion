@@ -1,4 +1,4 @@
-name: Build Champollion for iOS
+name: Build Champollion .deb for iOS
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
         make -j$(sysctl -n hw.logicalcpu)
         make install
 
-    - name: Build Champollion
+    - name: Build Champollion (statically linked)
       run: |
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release \
@@ -41,8 +41,36 @@ jobs:
                  -Dfmt_DIR=$PWD/../fmt/install/lib/cmake/fmt
         make -j$(sysctl -n hw.logicalcpu)
 
-    - name: Upload binary
+    - name: Create .deb package structure
+      run: |
+        mkdir -p deb/usr/local/bin
+        cp build/Champollion deb/usr/local/bin/
+        mkdir -p deb/DEBIAN
+        cat > deb/DEBIAN/control << EOF
+        Package: champollion
+        Version: 1.3.2-1
+        Section: utils
+        Priority: optional
+        Architecture: iphoneos-arm
+        Maintainer: Your Name <you@example.com>
+        Description: Papyrus decompiler for Skyrim SE
+         Champollion decompiles .pex files to readable .psc source.
+         Build from commit $(git rev-parse --short HEAD).
+        EOF
+        # postinst script to set permissions
+        cat > deb/DEBIAN/postinst << 'EOF'
+        #!/bin/sh
+        chmod 755 /usr/local/bin/Champollion
+        exit 0
+        EOF
+        chmod 755 deb/DEBIAN/postinst
+
+    - name: Build .deb
+      run: |
+        dpkg-deb --build deb champollion.deb
+
+    - name: Upload .deb
       uses: actions/upload-artifact@v4
       with:
-        name: Champollion-iOS
-        path: build/Champollion
+        name: champollion.deb
+        path: champollion.deb
