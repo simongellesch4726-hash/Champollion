@@ -44,7 +44,16 @@ jobs:
     - name: Create .deb package structure
       run: |
         mkdir -p deb/usr/local/bin
-        cp build/Champollion deb/usr/local/bin/
+        # Find binary
+        if [ -f build/Champollion ]; then
+          cp build/Champollion deb/usr/local/bin/
+        elif [ -f build/bin/Champollion ]; then
+          cp build/bin/Champollion deb/usr/local/bin/
+        else
+          echo "Error: Champollion binary not found!"
+          ls -la build/
+          exit 1
+        fi
         mkdir -p deb/DEBIAN
         cat > deb/DEBIAN/control << EOF
         Package: champollion
@@ -55,9 +64,7 @@ jobs:
         Maintainer: Your Name <you@example.com>
         Description: Papyrus decompiler for Skyrim SE
          Champollion decompiles .pex files to readable .psc source.
-         Build from commit $(git rev-parse --short HEAD).
         EOF
-        # postinst script to set permissions
         cat > deb/DEBIAN/postinst << 'EOF'
         #!/bin/sh
         chmod 755 /usr/local/bin/Champollion
